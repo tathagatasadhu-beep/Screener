@@ -310,12 +310,15 @@ def main():
             
             st.subheader("🎛️ Filters")
             
-            # Filter controls - removed PE and PB restrictions
-            peg_range = st.slider("PEG Ratio Range", 0.0, 5.0, (0.0, 2.0), 0.1, help="PEG < 1.0 typically indicates undervalued growth")
-            roic_min = st.slider("Minimum ROIC (%)", -50.0, 100.0, -50.0, 1.0, help="No restriction by default - shows all companies")
+            # Filter controls - made more permissive
+            peg_range = st.slider("PEG Ratio Range", 0.0, 10.0, (0.0, 10.0), 0.1, help="PEG < 1.0 typically indicates undervalued growth")
+            roic_min = st.slider("Minimum ROIC (%)", -100.0, 100.0, -100.0, 1.0, help="No restriction by default - shows all companies")
             
             # Market cap filter for mid, large, and very large cap
-            market_cap_min = st.slider("Minimum Market Cap ($B)", 0.0, 50.0, 2.0, 0.5, help="2B+ for mid-cap and above")
+            market_cap_min = st.slider("Minimum Market Cap ($B)", 0.0, 50.0, 0.0, 0.5, help="0B+ shows all companies")
+            
+            # Add debug option
+            show_debug = st.checkbox("🔍 Show Filter Debug Info", value=False)
             
             # Fetch data button
             fetch_data = st.button("🔄 Fetch Latest Data", type="primary")
@@ -385,21 +388,59 @@ def main():
             display_df['FCF (M)'] = display_df['FCF (M)'].apply(lambda x: f"{x:,.0f}" if pd.notnull(x) and x != 0 else "N/A")
             display_df['Price ($)'] = display_df['Price ($)'].apply(lambda x: f"{x:.2f}" if pd.notnull(x) and x != 0 else "N/A")
             
-            # Apply filters - removed PE and PB restrictions, added PEG and market cap filters
+            # Apply filters - made much more permissive
             # Convert market cap from millions to billions for filtering
-            market_cap_billions = pd.to_numeric(display_df['Market Cap (M)'], errors='coerce') / 1000
+            market_cap_billions = pd.to_numeric(display_df['Market Cap (M)'].str.replace(',', '').str.replace('N/A', '0'), errors='coerce') / 1000
+            peg_values = pd.to_numeric(display_df['PEG Ratio'], errors='coerce')
+            roic_values = pd.to_numeric(display_df['ROIC (%)'], errors='coerce')
             
-            filtered_df = display_df[
-                (pd.to_numeric(display_df['PEG Ratio'], errors='coerce').between(peg_range[0], peg_range[1], inclusive='both') | 
-                 pd.to_numeric(display_df['PEG Ratio'], errors='coerce').isna() |
-                 (pd.to_numeric(display_df['PEG Ratio'], errors='coerce') == 0)) &
-                (pd.to_numeric(display_df['ROIC (%)'], errors='coerce') >= roic_min) &
-                (market_cap_billions >= market_cap_min)
-            ]
+            # Create filter conditions
+            peg_condition = (
+                peg_values.between(peg_range[0], peg_range[1], inclusive='both') | 
+                peg_values.isna() |
+                (peg_values == 0)
+            )
+            roic_condition = (roic_values >= roic_min) | roic_values.isna()
+            market_cap_condition = (market_cap_billions >= market_cap_min) | market_cap_billions.isna()
+            
+            # Show debug info if requested
+            if show_debug:
+                st.markdown("### 🔍 Filter Analysis")
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Total Companies", len(display_df))
+                    st.metric("Pass PEG Filter", peg_condition.sum())
+                with col2:
+                    st.metric("Pass ROIC Filter", roic_condition.sum())
+                    st.metric("Pass Market Cap Filter", market_cap_condition.sum())
+                with col3:
+                    all_conditions = peg_condition & roic_condition & market_cap_condition
+                    st.metric("Pass All Filters", all_conditions.sum())
+                
+                # Show which companies are failing which filters
+                st.markdown("**Companies with missing key data:**")
+                missing_data = display_df[peg_values.isna() & roic_values.isna()]
+                if not missing_data.empty:
+                    st.write(missing_data[['Symbol', 'Company Name', 'PEG Ratio', 'ROIC (%)', 'Market Cap (M)']].head())
+            
+            filtered_df = display_df[peg_condition & roic_condition & market_cap_condition]
             
             # Display filtered results
             st.markdown("### 📋 Screening Results")
             st.markdown(f"**{len(filtered_df)}** companies match your criteria out of **{len(display_df)}** analyzed")
+            
+            if len(filtered_df) == 0 and len(display_df) > 0:
+                st.warning("⚠️ No companies pass the current filters. This might be due to:")
+                st.markdown("""
+                - **Missing PEG data** from Finnhub API for many stocks
+                - **Missing ROIC data** from Finnhub API  
+                - **API rate limits** preventing full data fetch
+                
+                **Try these solutions:**
+                1. Enable 'Show Filter Debug Info' above to see what's happening
+                2. Set all filters to maximum ranges temporarily
+                3. Try with fewer stocks to test API response
+                """)
             
             if not filtered_df.empty:
                 # Sort options
@@ -464,7 +505,24 @@ def main():
                         st.markdown("No stocks with ROIC-WACC > 5% found")
                 
             else:
-                st.warning("No companies match your current filter criteria. Try adjusting the filters.")
+                st.warning("⚠️ No companies match your current filter criteria. Try the following:")
+                
+                # Show a sample of the raw data to help diagnose
+                if len(display_df) > 0:
+                    st.markdown("**📊 Sample of available data (first 5 companies):**")
+                    sample_cols = ['Symbol', 'Company Name', 'PEG Ratio', 'ROIC (%)', 'WACC (%)', 'Market Cap (M)']
+                    available_cols = [col for col in sample_cols if col in display_df.columns]
+                    st.dataframe(display_df[available_cols].head(), use_container_width=True)
+                    
+                    st.markdown("**💡 Suggestions:**")
+                    st.markdown("""
+                    1. **Expand PEG range** to 0-10 (some growth stocks have high PEG)
+                    2. **Lower ROIC minimum** to -100% (some companies may have negative ROIC)
+                    3. **Set Market Cap to 0** to include all companies
+                    4. **Enable debug info** above to see filter statistics
+                    """)
+                else:
+                    st.error("No data was fetched. Please check your API key and try again.")
         
         else:
             st.info("👆 Click 'Fetch Latest Data' to start screening stocks!")
