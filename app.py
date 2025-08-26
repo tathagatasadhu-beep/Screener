@@ -148,7 +148,8 @@ class FinnhubDataFetcher:
                 'current_ratio': metrics.get('currentRatioQuarterly', 0),
                 'quick_ratio': metrics.get('quickRatioQuarterly', 0),
                 'roe': metrics.get('roeTTM', 0),
-                'roa': metrics.get('roaTTM', 0)
+                'roa': metrics.get('roaTTM', 0),
+                'wacc': 0  # Will be calculated later
             }
         except Exception as e:
             st.error(f"Error fetching data for {symbol}: {str(e)}")
@@ -208,11 +209,12 @@ def display_metrics_with_tooltips():
             st.markdown("**EV/Sales**: " + get_metric_tooltip('EV/Sales'))
         
         with col2:
-            st.markdown("**💰 Financial Health Metrics**")
+            st.markdown("**💰 Financial Health & Efficiency Metrics**")
             st.markdown("**Debt/Equity**: " + get_metric_tooltip('Debt/Equity'))
             st.markdown("**Free Cash Flow**: " + get_metric_tooltip('Free Cash Flow'))
             st.markdown("**ROIC**: " + get_metric_tooltip('ROIC'))
             st.markdown("**WACC**: " + get_metric_tooltip('WACC'))
+            st.markdown("**ROIC-WACC Spread**: " + get_metric_tooltip('ROIC-WACC Spread'))
 
 def create_summary_dashboard(df):
     """Create a summary dashboard with key insights"""
@@ -295,7 +297,7 @@ def main():
             
             # Stock symbols input
             st.subheader("📈 Stock Symbols")
-            default_stocks = "AAPL,MSFT,GOOGL,AMZN,TSLA,META,NVDA,JPM,JNJ,V"
+            default_stocks = "AAPL,MSFT,GOOGL,AMZN,TSLA,META,NVDA,JPM,JNJ,V,WMT,PG,UNH,HD,MA,BAC,ABBV,LLY,AVGO,XOM,CVX,PFE,TMO,COST,NFLX,CRM,ABT,ADBE,MRK,ACN,CSCO,PEP,NKE,LIN,DHR,VZ,CMCSA,QCOM,TXN,NEE,HON,UPS,LOW,PM,RTX,BMY,UNP,AMGN,T,SPGI,GS,MDT,CAT,ISRG,GILD,CVS,BLK,MMM,AMT,SYK,LRCX,MU,ELV,CI,ZTS,CB,DE,SO,DUK,BSX,ITW,APD,AON,CL,EMR,NSC,MMC,GD,PGR,EQIX,ICE,HUM,TFC,ETN,FIS,USB,PNC,GM,F,EBAY,PYPL"
             stock_input = st.text_area(
                 "Enter stock symbols (comma-separated):",
                 value=default_stocks,
@@ -308,10 +310,12 @@ def main():
             
             st.subheader("🎛️ Filters")
             
-            # Filter controls
-            pe_range = st.slider("P/E Ratio Range", 0.0, 50.0, (0.0, 30.0), 0.5)
-            pb_range = st.slider("P/B Ratio Range", 0.0, 10.0, (0.0, 3.0), 0.1)
-            roic_min = st.slider("Minimum ROIC (%)", -20.0, 50.0, 0.0, 1.0)
+            # Filter controls - removed PE and PB restrictions
+            peg_range = st.slider("PEG Ratio Range", 0.0, 5.0, (0.0, 2.0), 0.1, help="PEG < 1.0 typically indicates undervalued growth")
+            roic_min = st.slider("Minimum ROIC (%)", -50.0, 100.0, -50.0, 1.0, help="No restriction by default - shows all companies")
+            
+            # Market cap filter for mid, large, and very large cap
+            market_cap_min = st.slider("Minimum Market Cap ($B)", 0.0, 50.0, 2.0, 0.5, help="2B+ for mid-cap and above")
             
             # Fetch data button
             fetch_data = st.button("🔄 Fetch Latest Data", type="primary")
@@ -327,6 +331,10 @@ def main():
                     if data:
                         # Add calculated WACC
                         data['wacc'] = calculate_wacc_estimate(data)
+                        # Add ROIC - WACC spread
+                        roic_val = data.get('roic', 0) or 0
+                        wacc_val = data.get('wacc', 0) or 0
+                        data['roic_wacc_spread'] = roic_val - wacc_val
                         stock_data.append(data)
                     
                     # Add delay to respect API rate limits
@@ -343,7 +351,7 @@ def main():
             
             # Clean and format data
             numeric_columns = ['pe_ratio', 'pb_ratio', 'debt_to_equity', 'free_cash_flow', 
-                             'peg_ratio', 'ev_sales_ratio', 'roic', 'wacc']
+                             'peg_ratio', 'ev_sales_ratio', 'roic', 'wacc', 'roic_wacc_spread', 'market_cap']
             
             for col in numeric_columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
@@ -368,7 +376,8 @@ def main():
                 'peg_ratio': 'PEG Ratio',
                 'ev_sales_ratio': 'EV/Sales',
                 'roic': 'ROIC (%)',
-                'wacc': 'WACC (%)'
+                'wacc': 'WACC (%)',
+                'roic_wacc_spread': 'ROIC-WACC (%)'
             })
             
             # Format numeric columns
@@ -376,13 +385,16 @@ def main():
             display_df['FCF (M)'] = display_df['FCF (M)'].apply(lambda x: f"{x:,.0f}" if pd.notnull(x) and x != 0 else "N/A")
             display_df['Price ($)'] = display_df['Price ($)'].apply(lambda x: f"{x:.2f}" if pd.notnull(x) and x != 0 else "N/A")
             
-            # Apply filters
+            # Apply filters - removed PE and PB restrictions, added PEG and market cap filters
+            # Convert market cap from millions to billions for filtering
+            market_cap_billions = pd.to_numeric(display_df['Market Cap (M)'], errors='coerce') / 1000
+            
             filtered_df = display_df[
-                (pd.to_numeric(display_df['PE Ratio'], errors='coerce').between(pe_range[0], pe_range[1], inclusive='both') | 
-                 pd.to_numeric(display_df['PE Ratio'], errors='coerce').isna()) &
-                (pd.to_numeric(display_df['P/B Ratio'], errors='coerce').between(pb_range[0], pb_range[1], inclusive='both') | 
-                 pd.to_numeric(display_df['P/B Ratio'], errors='coerce').isna()) &
-                (pd.to_numeric(display_df['ROIC (%)'], errors='coerce') >= roic_min)
+                (pd.to_numeric(display_df['PEG Ratio'], errors='coerce').between(peg_range[0], peg_range[1], inclusive='both') | 
+                 pd.to_numeric(display_df['PEG Ratio'], errors='coerce').isna() |
+                 (pd.to_numeric(display_df['PEG Ratio'], errors='coerce') == 0)) &
+                (pd.to_numeric(display_df['ROIC (%)'], errors='coerce') >= roic_min) &
+                (market_cap_billions >= market_cap_min)
             ]
             
             # Display filtered results
@@ -394,7 +406,7 @@ def main():
                 col1, col2 = st.columns(2)
                 with col1:
                     sort_column = st.selectbox("Sort by:", 
-                                             ['PE Ratio', 'P/B Ratio', 'ROIC (%)', 'PEG Ratio', 'Market Cap (M)'])
+                                             ['PEG Ratio', 'ROIC (%)', 'ROIC-WACC (%)', 'WACC (%)', 'PE Ratio', 'P/B Ratio', 'Market Cap (M)'])
                 with col2:
                     sort_order = st.selectbox("Order:", ['Ascending', 'Descending'])
                 
@@ -433,22 +445,23 @@ def main():
                 col1, col2 = st.columns(2)
                 
                 with col1:
-                    st.markdown("**🎯 Best Value Opportunities:**")
-                    low_pe_df = filtered_df[pd.to_numeric(filtered_df['PE Ratio'], errors='coerce') < 15].head(3)
-                    if not low_pe_df.empty:
-                        for _, row in low_pe_df.iterrows():
-                            st.markdown(f"• **{row['Symbol']}** - P/E: {row['PE Ratio']}")
+                    st.markdown("**🎯 Best PEG Opportunities:**")
+                    low_peg_df = filtered_df[pd.to_numeric(filtered_df['PEG Ratio'], errors='coerce') < 1.0].head(3)
+                    if not low_peg_df.empty:
+                        for _, row in low_peg_df.iterrows():
+                            st.markdown(f"• **{row['Symbol']}** - PEG: {row['PEG Ratio']}")
                     else:
-                        st.markdown("No stocks with P/E < 15 found")
+                        st.markdown("No stocks with PEG < 1.0 found")
                 
                 with col2:
-                    st.markdown("**🚀 High ROIC Champions:**")
-                    high_roic_df = filtered_df[pd.to_numeric(filtered_df['ROIC (%)'], errors='coerce') > 15].head(3)
-                    if not high_roic_df.empty:
-                        for _, row in high_roic_df.iterrows():
-                            st.markdown(f"• **{row['Symbol']}** - ROIC: {row['ROIC (%)']}%")
+                    st.markdown("**🚀 Best Value Creators (ROIC-WACC):**")
+                    high_spread_df = filtered_df[pd.to_numeric(filtered_df['ROIC-WACC (%)'], errors='coerce') > 5].head(3)
+                    if not high_spread_df.empty:
+                        for _, row in high_spread_df.iterrows():
+                            roic_wacc = row['ROIC-WACC (%)']
+                            st.markdown(f"• **{row['Symbol']}** - Spread: {roic_wacc:.1f}%")
                     else:
-                        st.markdown("No stocks with ROIC > 15% found")
+                        st.markdown("No stocks with ROIC-WACC > 5% found")
                 
             else:
                 st.warning("No companies match your current filter criteria. Try adjusting the filters.")
