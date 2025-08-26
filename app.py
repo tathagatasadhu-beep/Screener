@@ -223,21 +223,37 @@ def create_summary_dashboard(df):
     
     col1, col2, col3, col4 = st.columns(4)
     
+    # Use original column names (before renaming)
+    pe_col = 'pe_ratio' if 'pe_ratio' in df.columns else 'PE Ratio'
+    pb_col = 'pb_ratio' if 'pb_ratio' in df.columns else 'P/B Ratio'
+    roic_col = 'roic' if 'roic' in df.columns else 'ROIC (%)'
+    wacc_col = 'wacc' if 'wacc' in df.columns else 'WACC (%)'
+    
     with col1:
-        undervalued_count = len(df[(df['PE Ratio'] < 15) & (df['P/B Ratio'] < 1.5)])
-        st.metric("Undervalued Stocks", undervalued_count, f"{undervalued_count/len(df)*100:.1f}%")
+        pe_data = pd.to_numeric(df[pe_col], errors='coerce')
+        pb_data = pd.to_numeric(df[pb_col], errors='coerce')
+        undervalued_count = len(df[(pe_data < 15) & (pb_data < 1.5)])
+        percentage = f"{undervalued_count/len(df)*100:.1f}%" if len(df) > 0 else "0%"
+        st.metric("Undervalued Stocks", undervalued_count, percentage)
     
     with col2:
-        high_roic_count = len(df[df['ROIC (%)'] > 8])
-        st.metric("High ROIC (>8%)", high_roic_count, f"{high_roic_count/len(df)*100:.1f}%")
+        roic_data = pd.to_numeric(df[roic_col], errors='coerce')
+        high_roic_count = len(df[roic_data > 8])
+        percentage = f"{high_roic_count/len(df)*100:.1f}%" if len(df) > 0 else "0%"
+        st.metric("High ROIC (>8%)", high_roic_count, percentage)
     
     with col3:
-        value_creators = len(df[df['ROIC (%)'] > df['WACC (%)']])
-        st.metric("Value Creators", value_creators, f"{value_creators/len(df)*100:.1f}%")
+        roic_data = pd.to_numeric(df[roic_col], errors='coerce')
+        wacc_data = pd.to_numeric(df[wacc_col], errors='coerce')
+        value_creators = len(df[roic_data > wacc_data])
+        percentage = f"{value_creators/len(df)*100:.1f}%" if len(df) > 0 else "0%"
+        st.metric("Value Creators", value_creators, percentage)
     
     with col4:
-        avg_pe = df['PE Ratio'].replace([np.inf, -np.inf], np.nan).dropna().mean()
-        st.metric("Avg P/E Ratio", f"{avg_pe:.1f}")
+        pe_data = pd.to_numeric(df[pe_col], errors='coerce')
+        avg_pe = pe_data.replace([np.inf, -np.inf], np.nan).dropna().mean()
+        avg_pe_display = f"{avg_pe:.1f}" if pd.notnull(avg_pe) else "N/A"
+        st.metric("Avg P/E Ratio", avg_pe_display)
 
 def main():
     # App header
@@ -335,6 +351,9 @@ def main():
             # Replace infinite values with NaN
             df = df.replace([np.inf, -np.inf], np.nan)
             
+            # Create summary dashboard BEFORE renaming columns
+            create_summary_dashboard(df)
+            
             # Create display DataFrame
             display_df = df.copy()
             display_df = display_df.rename(columns={
@@ -365,9 +384,6 @@ def main():
                  pd.to_numeric(display_df['P/B Ratio'], errors='coerce').isna()) &
                 (pd.to_numeric(display_df['ROIC (%)'], errors='coerce') >= roic_min)
             ]
-            
-            # Create summary dashboard
-            create_summary_dashboard(df)
             
             # Display filtered results
             st.markdown("### 📋 Screening Results")
