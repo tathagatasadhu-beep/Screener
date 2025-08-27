@@ -1,8 +1,9 @@
-streamlit==1.28.1
-pandas==2.0.3
-numpy==1.24.3
-yfinance==0.2.20
-plotly==5.17.0
-requests==2.31.0
-lxml==4.9.3
-html5lib==1.1
+streamlit
+pandas
+numpy
+yfinance
+plotly
+requests
+lxml
+html5lib
+beautifulsoup4
