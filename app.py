@@ -1,5 +1,6 @@
+pip install -r requirements.txt
+streamlit run app.py
 import streamlit as st
-
 # Check for required packages
 try:
     import pandas as pd
