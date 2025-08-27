@@ -575,6 +575,26 @@ def main():
         """, 
         unsafe_allow_html=True
     )
+# Display filter summary metrics
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Pass PEG Filter", peg_condition.sum())
+                with col2:
+                    st.metric("Pass ROIC Filter", roic_condition.sum())
+                    st.metric("Pass Market Cap Filter", market_cap_condition.sum())
+                with col3:
+                    all_conditions = peg_condition & roic_condition & market_cap_condition
+                    st.metric("Pass All Filters", all_conditions.sum())
+                
+                # Show data quality metrics
+                st.markdown("**📊 Data Quality:**")
+                quality_col1, quality_col2 = st.columns(2)
+                with quality_col1:
+                    st.metric("Companies with PEG data", (~df['PEG Ratio'].isna()).sum())
+                    st.metric("Companies with ROIC data", (~df['ROIC'].isna()).sum())
+                with quality_col2:
+                    st.metric("Companies with Market Cap data", (~df['Market Cap'].isna()).sum())
+                    st.metric("Total companies analyzed", len(df))
 
 if __name__ == "__main__":
     main().metric("Pass ROIC Filter", roic_condition.sum())
