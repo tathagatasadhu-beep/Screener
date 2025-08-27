@@ -31,6 +31,10 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# Force cache clear for deployment issues
+if 'deployment_id' not in st.session_state:
+    st.session_state.deployment_id = True
+
 # Custom CSS
 st.markdown("""
 <style>
