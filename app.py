@@ -578,9 +578,10 @@ def main():
 
 if __name__ == "__main__":
     main().metric("Pass ROIC Filter", roic_condition.sum())
-with col2:
-                    st.metric("Pass ROIC Filter", roic_condition.sum())
-                    st.metric("Pass Market Cap Filter", market_cap_condition.sum())              
+                    st.metric("Pass Market Cap Filter", market_cap_condition.sum())
+                with col3:
+                    all_conditions = peg_condition & roic_condition & market_cap_condition
+                    st.metric("Pass All Filters", all_conditions.sum())
                 
                 # Show data quality metrics
                 st.markdown("**📊 Data Quality:**")
