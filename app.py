@@ -1,15 +1,30 @@
 import streamlit as st
-import pandas as pd
-import numpy as np
-import yfinance as yf
-import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-import requests
-from datetime import datetime, timedelta
-import time
-import warnings
-warnings.filterwarnings('ignore')
+
+# Check for required packages
+try:
+    import pandas as pd
+    import numpy as np
+    import yfinance as yf
+    import plotly.express as px
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+    import requests
+    from datetime import datetime, timedelta
+    import time
+    import warnings
+    warnings.filterwarnings('ignore')
+except ImportError as e:
+    st.error(f"""
+    Missing required package: {e}
+    
+    Please install the required packages by running:
+    ```
+    pip install streamlit pandas numpy yfinance plotly requests lxml html5lib
+    ```
+    
+    Or create a requirements.txt file with the required packages.
+    """)
+    st.stop()
 
 # Page configuration
 st.set_page_config(
