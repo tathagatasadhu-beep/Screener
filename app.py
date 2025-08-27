@@ -330,7 +330,8 @@ def main():
                 for i, symbol in enumerate(symbols):
                     status_text.text(f"Fetching data for {symbol}... ({i+1}/{len(symbols)})")
                     data = fetcher.get_comprehensive_data(symbol)
-                    if stock_data.append(data)
+                    if stock_
+                    data.append(data)
                     else:
                         st.warning(f"⚠️ Could not fetch data for {symbol}")
                     time.sleep(0.3)
