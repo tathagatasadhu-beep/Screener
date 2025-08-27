@@ -1,26 +1,54 @@
 import streamlit as st
-# Check for required packages
+import sys
+
+# Debug information
+st.write("🔍 Debug Info:")
+st.write(f"Python version: {sys.version}")
+st.write("Checking imports...")
+
+# Check for required packages with detailed error reporting
 try:
     import pandas as pd
+    st.success("✅ pandas imported")
+except ImportError as e:
+    st.error(f"❌ pandas failed: {e}")
+
+try:
     import numpy as np
+    st.success("✅ numpy imported")
+except ImportError as e:
+    st.error(f"❌ numpy failed: {e}")
+
+try:
     import yfinance as yf
+    st.success("✅ yfinance imported")
+except ImportError as e:
+    st.error(f"❌ yfinance failed: {e}")
+
+try:
     import plotly.express as px
     import plotly.graph_objects as go
+    st.success("✅ plotly imported")
+except ImportError as e:
+    st.error(f"❌ plotly failed: {e}")
+
+try:
     import requests
+    st.success("✅ requests imported")
+except ImportError as e:
+    st.error(f"❌ requests failed: {e}")
+
+try:
     from datetime import datetime, timedelta
     import time
     import warnings
     warnings.filterwarnings('ignore')
+    st.success("✅ All standard libraries imported")
 except ImportError as e:
-    st.error(f"""
-    Missing required package: {e}
-    
-    Please install the required packages by running:
-    ```
-    pip install streamlit pandas numpy yfinance plotly requests lxml html5lib
-    ```
-    """)
-    st.stop()
+    st.error(f"❌ Standard libraries failed: {e}")
+
+st.write("---")
+st.write("If all imports are successful, the error is elsewhere. Continuing with app...")
 
 # Page configuration
 st.set_page_config(
